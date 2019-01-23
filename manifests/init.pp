@@ -36,6 +36,7 @@
 #
 class composer (
   $target_dir       = $::composer::params::target_dir,
+  $home_dir         = undef,
   $command_name     = $::composer::params::command_name,
   $user             = $::composer::params::user,
   $auto_update      = false,
@@ -50,6 +51,7 @@ class composer (
   validate_bool($auto_update)
   validate_string($version)
   validate_string($group)
+  validate_string($home_dir)
   validate_bool($build_deps)
 
   if $build_deps {
@@ -65,6 +67,11 @@ class composer (
 
   $composer_full_path = "${target_dir}/${command_name}"
 
+  $composer_home_dir = $home_dir ? {
+    undef => $target_dir,
+    default => $home_dir
+  }
+
   $unless = $version ? {
     undef   => "/usr/bin/test -f ${composer_full_path}",
     default => "/usr/bin/test -f ${composer_full_path} && ${composer_full_path} -V |grep -q ${version}"
@@ -72,7 +79,7 @@ class composer (
 
   exec { 'composer-install':
     command     => "/usr/bin/wget --no-check-certificate -O ${composer_full_path} ${target}",
-    environment => [ "COMPOSER_HOME=${target_dir}" ],
+    environment => [ "COMPOSER_HOME=${composer_home_dir}" ],
     user        => $user,
     unless      => $unless,
     timeout     => $download_timeout,
@@ -90,7 +97,7 @@ class composer (
   $ensure = $auto_update ? { true => present, false => absent }
   cron { 'composer-update':
     ensure  => $ensure,
-    command => "COMPOSER_HOME=${target_dir} ${composer_full_path} self-update -q",
+    command => "COMPOSER_HOME=${composer_home_dir} ${composer_full_path} self-update -q",
     hour    => 0,
     minute  => fqdn_rand(60),
     user    => $user,
